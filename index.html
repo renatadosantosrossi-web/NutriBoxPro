@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html font-sans lang="pt-BR" class="h-full bg-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NutriBox Pro AI - Plataforma Nutricional</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- React & React DOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <!-- Babel para JSX em tempo real -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fadeIn {
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+  </style>
+</head>
+<body class="h-full overflow-hidden text-slate-800 antialiased">
+  <div id="root" class="h-full"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // --- BASE INICIAL DE ALIMENTOS TACO ---
+    const TACO_INICIAL = [
+      { id: 1, nome: 'Arroz branco cozido', cat: 'Cereais', porcao: 100, kcal: 130, carb: 28.1, prot: 2.5, lip: 0.2 },
+      { id: 2, nome: 'Feijão carioca cozido', cat: 'Leguminosas', porcao: 100, kcal: 76, carb: 13.6, prot: 4.8, lip: 0.5 },
+      { id: 3, nome: 'Peito de frango grelhado', cat: 'Carnes', porcao: 100, kcal: 159, carb: 0, prot: 32.0, lip: 2.5 },
+      { id: 4, nome: 'Ovo de galinha cozido', cat: 'Ovos', porcao: 50, kcal: 73, carb: 0.4, prot: 6.3, lip: 4.8 },
+      { id: 5, nome: 'Banana prata', cat: 'Frutas', porcao: 100, kcal: 98, carb: 26.0, prot: 1.3, lip: 0.1 },
+      { id: 6, nome: 'Azeite de oliva extra virgem', cat: 'Gorduras', porcao: 13, kcal: 114, carb: 0, prot: 0, lip: 13.0 },
+      { id: 7, nome: 'Aveia em flocos', cat: 'Cereais', porcao: 30, kcal: 118, carb: 20.0, prot: 4.3, lip: 2.2 },
+      { id: 8, nome: 'Iogurte natural integral', cat: 'Laticínios', porcao: 170, kcal: 126, carb: 9.1, prot: 6.8, lip: 7.0 },
+      { id: 9, nome: 'Batata doce cozida', cat: 'Tubérculos', porcao: 100, kcal: 77, carb: 18.4, prot: 0.6, lip: 0.1 },
+      { id: 10, nome: 'Castanha-do-Pará', cat: 'Oleaginosas', porcao: 15, kcal: 98, carb: 1.8, prot: 2.1, lip: 9.9 }
+    ];
+
+    // --- PACIENTES DE EXEMPLO ---
+    const PACIENTES_INICIAIS = [
+      {
+        id: 1,
+        nome: 'Mariana Souza',
+        idade: 30,
+        sexo: 'feminino',
+        peso: 65,
+        altura: 165,
+        fatorAtividade: 1.375,
+        objetivo: 'emagrecimento',
+        cintura: 78,
+        quadril: 98,
+        dobraPeito: 12,
+        dobraAxilar: 10,
+        dobraTriceps: 15,
+        dobraSubescapular: 14,
+        dobraAbdominal: 22,
+        dobraSuprailiaca: 18,
+        dobraCoxa: 20,
+        patologias: 'Nenhuma',
+        medicamentos: 'Nenhum',
+        restricoes: 'Intolerância leve à lactose',
+        observacoesNutri: 'Paciente relata boa adesão aos treinos, porém sente muita fome no final da tarde. Recomendado aumentar ingestão de fibras no lanche.'
+      },
+      {
+        id: 2,
+        nome: 'Carlos Eduardo',
+        idade: 28,
+        sexo: 'masculino',
+        peso: 82,
+        altura: 180,
+        fatorAtividade: 1.55,
+        objetivo: 'hipertrofia',
+        cintura: 84,
+        quadril: 96,
+        dobraPeito: 8,
+        dobraAxilar: 7,
+        dobraTriceps: 10,
+        dobraSubescapular: 11,
+        dobraAbdominal: 15,
+        dobraSuprailiaca: 12,
+        dobraCoxa: 14,
+        patologias: 'Hipertensão leve controlada',
+        medicamentos: 'Losartana 50mg',
+        restricoes: 'Nenhuma',
+        observacoesNutri: 'Foco total em ganho de massa magra. Ajustada cota proteica para 2.2g/kg.'
+      }
+    ];
+
+    function AppNutriMaster() {
+      const [activeTab, setActiveTab] = useState('prontuario');
+      const [pacientes, setPacientes] = useState(() => {
+        const s = localStorage.getItem('nutribox_pacientes');
+        return s ? JSON.parse(s) : PACIENTES_INICIAIS;
+      });
+      const [pacienteId, setPacienteId] = useState(1);
+      const paciente = pacientes.find(p => p.id === pacienteId) || pacientes[0];
+
+      // Estado TACO
+      const [taco, setTaco] = useState(() => {
+        const s = localStorage.getItem('nutribox_taco');
+        return s ? JSON.parse(s) : TACO_INICIAL;
+      });
+      const [novoAlimento, setNovoAlimento] = useState({ nome: '', cat: '', porcao: 100, kcal: 0, carb: 0, prot: 0, lip: 0 });
+      const [buscaTaco, setBuscaTaco] = useState('');
+
+      // Agenda
+      const [consultas, setConsultas] = useState(() => {
+        const s = localStorage.getItem('nutribox_consultas');
+        return s ? JSON.parse(s) : [
+          { id: 1, pacienteId: 1, data: '2026-11-02', hora: '09:00', tipo: 'Consulta de Retorno', status: 'Agendado' },
+          { id: 2, pacienteId: 2, data: '2026-11-02', hora: '10:30', tipo: 'Primeira Consulta', status: 'Agendado' }
+        ];
+      });
+
+      // Plano Rascunho IA
+      const [planoIA, setPlanoIA] = useState(null);
+      const [diarioStatus, setDiarioStatus] = useState('rascunho');
+
+      // Atualizações de LocalStorage
+      useEffect(() => { localStorage.setItem('nutribox_taco', JSON.stringify(taco)); }, [taco]);
+      useEffect(() => { localStorage.setItem('nutribox_pacientes', JSON.stringify(pacientes)); }, [pacientes]);
+      useEffect(() => { localStorage.setItem('nutribox_consultas', JSON.stringify(consultas)); }, [consultas]);
+
+      // Atualizar dados do paciente ativo
+      const updatePaciente = (field, value) => {
+        setPacientes(pacientes.map(p => p.id === paciente.id ? { ...p, [field]: value } : p));
+      };
+
+      // --- CÁLCULOS METABÓLICOS ---
+      const calcularTMB = () => {
+        let t = (10 * paciente.peso) + (6.25 * paciente.altura) - (5 * paciente.idade);
+        t += paciente.sexo === 'masculino' ? 5 : -161;
+        return Math.round(t);
+      };
+      const tmb = calcularTMB();
+      const getVal = Math.round(tmb * paciente.fatorAtividade);
+      const caloriasMeta = paciente.objetivo === 'emagrecimento' ? getVal - 450 :
+                           paciente.objetivo === 'hipertrofia' ? getVal + 400 : getVal;
+
+      const imc = (paciente.peso / Math.pow(paciente.altura / 100, 2)).toFixed(1);
+      const rcq = (paciente.cintura / paciente.quadril).toFixed(2);
+
+      const soma7 = Number(paciente.dobraPeito) + Number(paciente.dobraAxilar) + 
+                     Number(paciente.dobraTriceps) + Number(paciente.dobraSubescapular) + 
+                     Number(paciente.dobraAbdominal) + Number(paciente.dobraSuprailiaca) + 
+                     Number(paciente.dobraCoxa);
+
+      let dc = 0;
+      if (paciente.sexo === 'masculino') {
+        dc = 1.112 - (0.00043499 * soma7) + (0.00000055 * Math.pow(soma7, 2)) - (0.00028826 * paciente.idade);
+      } else {
+        dc = 1.097 - (0.00046971 * soma7) + (0.00000056 * Math.pow(soma7, 2)) - (0.00012828 * paciente.idade);
+      }
+      const percGordura = dc > 0 ? Math.max(3, ((495 / dc) - 450)).toFixed(1) : '18.0';
+      const kgGordura = ((paciente.peso * percGordura) / 100).toFixed(1);
+      const kgMagra = (paciente.peso - kgGordura).toFixed(1);
+
+      const gProt = Math.round((paciente.objetivo === 'hipertrofia' ? 2.2 : 2.0) * paciente.peso);
+      const gLip = Math.round(0.9 * paciente.peso);
+      const gCarbo = Math.round(Math.max(0, caloriasMeta - ((gProt * 4) + (gLip * 9))) / 4);
+
+      // Gerador de Plano IA
+      const gerarPlanoIA = () => {
+        const cafe = taco.filter(t => [1, 5, 7, 8].includes(t.id));
+        const almoco = taco.filter(t => [1, 2, 3, 6].includes(t.id));
+        const lanche = taco.filter(t => [5, 10].includes(t.id));
+        const jantar = taco.filter(t => [3, 9, 6].includes(t.id));
+
+        setPlanoIA({
+          refeicoes: [
+            { nome: '07:30 - Café da Manhã', itens: cafe },
+            { nome: '12:30 - Almoço', itens: almoco },
+            { nome: '16:00 - Lanche da Tarde', itens: lanche },
+            { nome: '20:00 - Jantar', itens: jantar },
+          ]
+        });
+        setDiarioStatus('rascunho');
+      };
+
+      // Inicialização do Lucide Icons
+      useEffect(() => {
+        if (window.lucide) window.lucide.createIcons();
+      }, [activeTab, pacienteId, planoIA]);
+
+      return (
+        <div className="flex flex-col md:flex-row h-screen bg-slate-100 font-sans text-slate-800 overflow-hidden">
+          
+          {/* SIDEBAR NAVEGAÇÃO */}
+          <aside className="w-full md:w-64 bg-emerald-900 text-white flex flex-col justify-between shadow-2xl z-30">
+            <div>
+              <div className="p-5 flex items-center space-x-3 border-b border-emerald-800">
+                <i data-lucide="apple" className="w-7 h-7 text-emerald-400"></i>
+                <div>
+                  <h1 className="font-extrabold text-lg tracking-wide">NutriBox Pro</h1>
+                  <p className="text-xs text-emerald-300">Inteligência Nutricional</p>
+                </div>
+              </div>
+
+              {/* SELETOR RÁPIDO DE PACIENTE */}
+              <div className="p-3 border-b border-emerald-800/80 bg-emerald-950/40">
+                <label className="block text-[10px] font-bold uppercase text-emerald-400 mb-1">Paciente em Atendimento:</label>
+                <select 
+                  value={pacienteId}
+                  onChange={e => setPacienteId(Number(e.target.value))}
+                  className="w-full bg-emerald-800 text-white rounded-lg p-2 text-xs font-semibold focus:ring-2 focus:ring-emerald-400 outline-none"
+                >
+                  {pacientes.map(p => (
+                    <option key={p.id} value={p.id}>{p.nome}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* NAV MENU */}
+              <nav className="p-3 space-y-1">
+                {[
+                  { id: 'prontuario', label: 'Prontuário & Relatório IA', icon: 'file-text' },
+                  { id: 'anamnese', label: 'Anamnese Clínica', icon: 'clipboard-list' },
+                  { id: 'calculadoras', label: 'Calculadoras & Antropometria', icon: 'calculator' },
+                  { id: 'plano_ia', label: 'Plano & Diário IA (Rascunho)', icon: 'sparkles' },
+                  { id: 'agenda', label: 'Agenda de Consultas', icon: 'calendar' },
+                  { id: 'taco', label: 'Tabela TACO & Alimentos', icon: 'database' },
+                  { id: 'diario', label: 'Hidratação & Logs', icon: 'droplet' },
+                ].map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                      activeTab === item.id ? 'bg-emerald-600 text-white shadow-lg' : 'text-emerald-100 hover:bg-emerald-800/60'
+                    }`}
+                  >
+                    <i data-lucide={item.icon} className="w-4 h-4"></i>
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </nav>
+            </div>
+
+            <div className="p-4 bg-emerald-950 border-t border-emerald-800 text-[11px]">
+              <p className="text-emerald-400 font-bold">Nutricionista Conectado</p>
+              <p className="text-white">Dra. Camila Rocha (CRN 4-12345)</p>
+            </div>
+          </aside>
+
+          {/* MAIN CONTENT AREA */}
+          <main className="flex-1 flex flex-col overflow-y-auto">
+            
+            {/* TOP BAR */}
+            <header className="bg-white border-b border-slate-200 px-6 py-3.5 flex justify-between items-center shadow-xs">
+              <div className="flex items-center space-x-3">
+                <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-3 py-1 rounded-full border border-emerald-200">
+                  {paciente.nome} ({paciente.idade} anos)
+                </span>
+                <span className="text-xs text-slate-500 uppercase font-bold">{paciente.objetivo}</span>
+              </div>
+              <div className="text-xs font-semibold text-slate-500">
+                Meta Calórica: <span className="text-emerald-600 font-extrabold">{caloriasMeta} kcal</span>
+              </div>
+            </header>
+
+            {/* VISTAS DA APLICAÇÃO */}
+            <div className="p-6 max-w-6xl mx-auto w-full space-y-6">
+
+              {/* 1. PRONTUÁRIO & RELATÓRIO IA */}
+              {activeTab === 'prontuario' && (
+                <div className="space-y-6 animate-fadeIn">
+                  
+                  {/* RELATÓRIO ELABORADO PELA IA */}
+                  <div className="bg-gradient-to-br from-emerald-900 to-teal-900 text-white p-6 rounded-2xl shadow-xl space-y-4">
+                    <div className="flex justify-between items-center border-b border-emerald-700/60 pb-3">
+                      <div className="flex items-center space-x-2">
+                        <i data-lucide="bot" className="w-6 h-6 text-emerald-300"></i>
+                        <h3 className="font-bold text-base text-emerald-100">Relatório Clínico Informativo (Gerado por IA)</h3>
+                      </div>
+                      <span className="text-[10px] bg-emerald-800/80 px-2.5 py-1 rounded-full text-emerald-300 font-mono">Uso Exclusivo Interno</span>
+                    </div>
+
+                    <div className="text-xs leading-relaxed space-y-3 text-emerald-100">
+                      <p>
+                        <strong className="text-white">Diagnóstico Nutricional Sintético:</strong> Paciente <strong className="text-white">{paciente.nome}</strong> ({paciente.sexo}, {paciente.idade} anos), apresenta IMC de <strong className="text-emerald-300">{imc} kg/m²</strong> e percentual de gordura estimado em <strong className="text-emerald-300">{percGordura}%</strong> (Protocolo Jackson & Pollock 7 dobras). Taxa Metabólica Basal calculada em <strong>{tmb} kcal</strong> com Gasto Energético Total de <strong>{getVal} kcal</strong>.
+                      </p>
+                      <p>
+                        <strong className="text-white">Direcionamento da Conduta:</strong> Foco em <strong className="text-white">{paciente.objetivo.toUpperCase()}</strong> com meta energética de <strong className="text-emerald-300">{caloriasMeta} kcal/dia</strong>. Distribuição proposta: <strong>{gProt}g de Proteína</strong> ({((gProt*4/caloriasMeta)*100).toFixed(0)}%), <strong>{gCarbo}g de Carboidratos</strong> e <strong>{gLip}g de Lipídios</strong>.
+                      </p>
+                      <p className="bg-emerald-950/50 p-3 rounded-lg border border-emerald-700/50 text-[11px]">
+                        ⚠️ <strong>Alertas Clínicos & Restrições:</strong> Restrições relatadas: <em>"{paciente.restricoes}"</em>. Patologias/Medicação: <em>"{paciente.patologias}" / "{paciente.medicamentos}"</em>.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* OBSERVAÇÕES EXCLUSIVAS DO NUTRICIONISTA */}
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+                    <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                      <h3 className="font-bold text-slate-800 flex items-center space-x-2 text-sm">
+                        <i data-lucide="edit-3" className="w-4 h-4 text-emerald-600"></i>
+                        <span>Anotações Técnicas & Observações do Nutricionista</span>
+                      </h3>
+                      <span className="text-xs text-emerald-600 font-semibold flex items-center space-x-1">
+                        <i data-lucide="check" className="w-3.5 h-3.5"></i>
+                        <span>Salvo Automaticamente</span>
+                      </span>
+                    </div>
+
+                    <textarea
+                      rows="6"
+                      value={paciente.observacoesNutri || ''}
+                      onChange={e => updatePaciente('observacoesNutri', e.target.value)}
+                      placeholder="Espaço exclusivo para o nutricionista registrar evolução, pareceres pessoais, estratégias comportamentais ou observações confidenciais..."
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-3.5 text-xs text-slate-700 leading-relaxed focus:ring-2 focus:ring-emerald-500 focus:bg-white outline-none"
+                    ></textarea>
+                  </div>
+                </div>
+              )}
+
+              {/* 2. ANAMNESE */}
+              {activeTab === 'anamnese' && (
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6 animate-fadeIn">
+                  <h3 className="font-bold text-slate-800 border-b pb-3 text-sm">Ficha de Anamnese Completa</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-1">Nome Completo</label>
+                      <input type="text" value={paciente.nome} onChange={e => updatePaciente('nome', e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-1">Idade</label>
+                      <input type="number" value={paciente.idade} onChange={e => updatePaciente('idade', Number(e.target.value))} className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-1">Sexo Biológico</label>
+                      <select value={paciente.sexo} onChange={e => updatePaciente('sexo', e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs">
+                        <option value="feminino">Feminino</option>
+                        <option value="masculino">Masculino</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-1">Peso (kg)</label>
+                      <input type="number" value={paciente.peso} onChange={e => updatePaciente('peso', Number(e.target.value))} className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-1">Altura (cm)</label>
+                      <input type="number" value={paciente.altura} onChange={e => updatePaciente('altura', Number(e.target.value))} className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-1">Objetivo Clinico</label>
+                      <select value={paciente.objetivo} onChange={e => updatePaciente('objetivo', e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs font-bold text-emerald-700">
+                        <option value="emagrecimento">Emagrecimento</option>
+                        <option value="hipertrofia">Hipertrofia</option>
+                        <option value="manutencao">Manutenção</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 3. CALCULADORAS & ANTROPOMETRIA */}
+              {activeTab === 'calculadoras' && (
+                <div className="space-y-6 animate-fadeIn">
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h3 className="font-bold text-slate-800 mb-4 text-sm">Protocolo 7 Dobras Cutâneas (Jackson & Pollock)</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-7 gap-2">
+                      {[
+                        { key: 'dobraPeito', label: 'Peitoral' },
+                        { key: 'dobraAxilar', label: 'Axilar M.' },
+                        { key: 'dobraTriceps', label: 'Trícipe' },
+                        { key: 'dobraSubescapular', label: 'Subescap.' },
+                        { key: 'dobraAbdominal', label: 'Abdominal' },
+                        { key: 'dobraSuprailiaca', label: 'Suprailíaca' },
+                        { key: 'dobraCoxa', label: 'Coxa' }
+                      ].map(d => (
+                        <div key={d.key}>
+                          <label className="block text-[10px] font-bold text-slate-400 mb-1 uppercase">{d.label} (mm)</label>
+                          <input type="number" value={paciente[d.key]} onChange={e => updatePaciente(d.key, Number(e.target.value))} className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-center text-xs font-semibold" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                      <span className="text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider">Metabolismo</span>
+                      <h4 className="font-bold text-slate-800 text-sm">TMB & GET</h4>
+                      <div className="text-xs space-y-2">
+                        <div className="flex justify-between"><span>TMB (Mifflin):</span><strong className="text-slate-700">{tmb} kcal</strong></div>
+                        <div className="flex justify-between"><span>GET:</span><strong className="text-slate-700">{getVal} kcal</strong></div>
+                        <div className="flex justify-between border-t pt-2 text-emerald-700"><strong>Prescrição:</strong><strong>{caloriasMeta} kcal</strong></div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                      <span className="text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider">Composição Corporal</span>
+                      <h4 className="font-bold text-slate-800 text-sm">% Gordura (Siri)</h4>
+                      <div className="text-xs space-y-2">
+                        <div className="flex justify-between"><span>IMC:</span><strong>{imc} kg/m²</strong></div>
+                        <div className="flex justify-between text-rose-600 font-bold"><span>% Gordura:</span><span>{percGordura}%</span></div>
+                        <div className="flex justify-between"><span>Massa Magra:</span><strong>{kgMagra} kg</strong></div>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                      <span className="text-[10px] font-extrabold text-emerald-600 uppercase tracking-wider">Macros Prescritos</span>
+                      <h4 className="font-bold text-slate-800 text-sm">Gramatura Diária</h4>
+                      <div className="text-xs space-y-2">
+                        <div className="flex justify-between"><span>Proteína:</span><strong>{gProt} g</strong></div>
+                        <div className="flex justify-between"><span>Carboidratos:</span><strong>{gCarbo} g</strong></div>
+                        <div className="flex justify-between"><span>Lipídios:</span><strong>{gLip} g</strong></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 4. PLANO & DIÁRIO IA */}
+              {activeTab === 'plano_ia' && (
+                <div className="space-y-6 animate-fadeIn">
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex justify-between items-center">
+                    <div>
+                      <h3 className="font-bold text-slate-800 text-sm">Gerador Autônomo de Plano Alimentar (TACO + IA)</h3>
+                      <p className="text-xs text-slate-500">Criação automatizada ajustada às metas de {caloriasMeta} kcal do paciente.</p>
+                    </div>
+                    <button onClick={gerarPlanoIA} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-md flex items-center space-x-2">
+                      <i data-lucide="sparkles" className="w-4 h-4"></i>
+                      <span>Gerar Rascunho IA</span>
+                    </button>
+                  </div>
+
+                  {planoIA && (
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+                      <div className="flex justify-between items-center border-b pb-3">
+                        <div className="flex items-center space-x-2">
+                          <span className={`text-[10px] uppercase font-bold px-3 py-1 rounded-full ${
+                            diarioStatus === 'rascunho' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                          }`}>
+                            Status: {diarioStatus === 'rascunho' ? 'Rascunho da IA (Aguardando Nutricionista)' : 'Aprovado pelo Profissional'}
+                          </span>
+                        </div>
+                        {diarioStatus === 'rascunho' && (
+                          <button onClick={() => setDiarioStatus('aprovado')} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg">
+                            Aprovar Plano
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {planoIA.refeicoes.map((ref, i) => (
+                          <div key={i} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                            <h4 className="font-bold text-xs text-emerald-800">{ref.nome}</h4>
+                            <ul className="text-xs space-y-1 text-slate-600">
+                              {ref.itens.map((it, idx) => (
+                                <li key={idx} className="flex justify-between">
+                                  <span>{it.nome}</span>
+                                  <strong className="text-slate-800">{it.porcao}g</strong>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 5. AGENDA DE CONSULTAS */}
+              {activeTab === 'agenda' && (
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4 animate-fadeIn">
+                  <h3 className="font-bold text-slate-800 text-sm border-b pb-3">Agenda de Consultas do Consultório</h3>
+                  <div className="space-y-3">
+                    {consultas.map(c => {
+                      const p = pacientes.find(item => item.id === c.pacienteId);
+                      return (
+                        <div key={c.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex justify-between items-center text-xs">
+                          <div className="space-y-1">
+                            <span className="font-bold text-slate-800">{p ? p.nome : 'Paciente'}</span>
+                            <div className="text-slate-500">{c.tipo} — {c.data} às {c.hora}</div>
+                          </div>
+                          <span className="bg-emerald-100 text-emerald-800 font-bold px-3 py-1 rounded-full">{c.status}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 6. TABELA TACO */}
+              {activeTab === 'taco' && (
+                <div className="space-y-6 animate-fadeIn">
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                    <h3 className="font-bold text-slate-800 text-sm">Base de Alimentos (Tabela TACO)</h3>
+                    <input 
+                      type="text" 
+                      placeholder="Buscar alimento..." 
+                      value={buscaTaco} 
+                      onChange={e => setBuscaTaco(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs"
+                    />
+                  </div>
+
+                  <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-100 text-slate-600 font-bold uppercase">
+                        <tr>
+                          <th className="p-3">Alimento</th>
+                          <th className="p-3">Categoria</th>
+                          <th className="p-3">Kcal (100g)</th>
+                          <th className="p-3">Carb (g)</th>
+                          <th className="p-3">Prot (g)</th>
+                          <th className="p-3">Lip (g)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {taco.filter(t => t.nome.toLowerCase().includes(buscaTaco.toLowerCase())).map(t => (
+                          <tr key={t.id} className="hover:bg-slate-50">
+                            <td className="p-3 font-semibold text-slate-800">{t.nome}</td>
+                            <td className="p-3 text-slate-500">{t.cat}</td>
+                            <td className="p-3 font-bold text-emerald-700">{t.kcal}</td>
+                            <td className="p-3">{t.carb}</td>
+                            <td className="p-3">{t.prot}</td>
+                            <td className="p-3">{t.lip}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* 7. HIDRATAÇÃO */}
+              {activeTab === 'diario' && (
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4 animate-fadeIn text-center">
+                  <h3 className="font-bold text-slate-800 text-sm">Calculadora de Hidratação Personalizada</h3>
+                  <p className="text-xs text-slate-500">Meta baseada em 35ml por kg de peso corporal.</p>
+                  <div className="text-4xl font-extrabold text-blue-600 my-6">
+                    {(paciente.peso * 35)} ml / dia
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </main>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<AppNutriMaster />);
+  </script>
+</body>
+</html>
